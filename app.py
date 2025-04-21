@@ -1,69 +1,94 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-from PIL import Image, ImageDraw
-import os
+import plotly.express as px
+import datetime
 
-# --- Title ---
-st.set_page_config(page_title="Supreme ICT Dashboard", layout="wide")
-st.title("📊 Supreme ICT Trade Dashboard v2")
-
-# --- File Upload ---
-st.sidebar.header("📁 Upload Trade Data")
-uploaded_file = st.sidebar.file_uploader("Upload your trade log (.csv or .xlsx)", type=["csv", "xlsx"])
-
-if uploaded_file:
+# --- Load Data ---
+@st.cache_data
+def load_data():
     try:
-        if uploaded_file.name.endswith('.csv'):
-            df = pd.read_csv(uploaded_file)
-        else:
-            df = pd.read_excel(uploaded_file)
-
-        # Clean column names
+        df = pd.read_csv("your_trades.csv")  # Replace with your actual file
         df.columns = df.columns.str.strip().str.title()
-
-        # Basic Info
-        st.sidebar.success("✅ File uploaded successfully!")
-        st.subheader("📌 Trade Summary")
-        st.write(f"**Total Trades:** {len(df)}")
-
-        # Symbol Dropdown
-        if 'Symbol' in df.columns:
-            symbol_list = df['Symbol'].dropna().unique()
-            selected_symbol = st.sidebar.selectbox("Select Symbol", options=symbol_list)
-            filtered_df = df[df['Symbol'] == selected_symbol]
-        else:
-            st.warning("⚠️ 'Symbol' column not found. Please check your file format.")
-            filtered_df = df
-
-        # --- Dashboard Quick Previews ---
-        st.markdown("## 🔍 Dashboard Quick Previews")
-        st.caption("These will be replaced by real-time visuals or screenshots from your modules.")
-
-        # Helper to create placeholder images
-        def create_placeholder_image(text, size=(600, 200)):
-            img = Image.new("RGB", size, color="lightgrey")
-            draw = ImageDraw.Draw(img)
-            w, h = draw.textsize(text)
-            draw.text(((size[0] - w) / 2, (size[1] - h) / 2), text, fill="black")
-            return img
-
-        # Equity Curve Preview
-        st.markdown("### 📈 Equity Curve")
-        placeholder_equity = create_placeholder_image("Equity Curve Preview")
-        st.image(placeholder_equity, caption="Simulated Equity Curve", use_column_width=True)
-
-        # Psychology State Summary
-        st.markdown("### 🧠 Psychology Snapshot")
-        placeholder_psych = create_placeholder_image("Psychology State Summary")
-        st.image(placeholder_psych, caption="Emotional Zones & States", use_column_width=True)
-
-        # Setup Tag Matrix Preview
-        st.markdown("### 🧩 Setup Tag Performance Matrix")
-        placeholder_matrix = create_placeholder_image("Setup Tag P&L Matrix")
-        st.image(placeholder_matrix, caption="Profit/Loss per Setup Tag", use_column_width=True)
-
+        return df
     except Exception as e:
-        st.error(f"❌ An error occurred: {e}")
+        st.error(f"Error loading data: {e}")
+        return pd.DataFrame()
+
+df = load_data()
+
+# --- Sidebar ---
+st.sidebar.title("📊 Dashboard Filters")
+st.sidebar.markdown("---")
+
+# Theme Toggle
+theme_toggle = st.sidebar.radio("🌗 Theme", ["Light", "Dark"])
+
+# Filter Controls
+symbol_list = df['Symbol'].unique() if not df.empty else []
+selected_symbols = st.sidebar.multiselect("Select Symbol(s)", symbol_list, default=symbol_list)
+session_options = ['Asian', 'London', 'New York', 'Post-News', 'Non-Killzone']
+selected_sessions = st.sidebar.multiselect("Select Session(s)", session_options, default=session_options)
+outcomes = df['Outcome'].unique() if not df.empty else []
+selected_outcomes = st.sidebar.multiselect("Select Outcome(s)", outcomes, default=outcomes)
+
+# Date Range
+if not df.empty:
+    df['Date'] = pd.to_datetime(df['Date'])
+    min_date, max_date = df['Date'].min(), df['Date'].max()
+    date_range = st.sidebar.date_input("📅 Date Range", [min_date, max_date])
 else:
-    st.info("👈 Upload your trade log to get started.")
+    date_range = [datetime.date.today(), datetime.date.today()]
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("🔁 [Export PDF] | [Export Excel]")
+
+# --- Main Header ---
+st.title("💥 Supreme ICT Trade Dashboard")
+st.markdown("Use filters from the sidebar to dynamically update the visuals below.")
+st.markdown("---")
+
+# --- Filtered Data ---
+if not df.empty:
+    df_filtered = df[
+        (df['Symbol'].isin(selected_symbols)) &
+        (df['Session'].isin(selected_sessions)) &
+        (df['Outcome'].isin(selected_outcomes)) &
+        (df['Date'] >= pd.to_datetime(date_range[0])) &
+        (df['Date'] <= pd.to_datetime(date_range[1]))
+    ]
+else:
+    df_filtered = pd.DataFrame()
+
+# --- Summary Row ---
+st.subheader("📌 Trade Summary")
+if not df_filtered.empty:
+    st.write(f"**Total Trades:** {len(df_filtered)}")
+    st.write(f"**Win Rate:** {round((df_filtered['Outcome'] == 'Win').mean() * 100, 2)}%")
+else:
+    st.warning("No trades to show. Adjust filters.")
+
+# --- Charts Section ---
+st.subheader("📈 Equity Curve & PnL Chart")
+st.plotly_chart(px.line(df_filtered, x='Date', y='Equity', title='Equity Curve'), use_container_width=True)
+
+st.subheader("📊 Setup Tag vs. PnL Matrix")
+st.plotly_chart(px.bar(df_filtered, x='Setup', y='Profit', color='Outcome', title='Setup Performance'), use_container_width=True)
+
+# --- Psychology Tracker ---
+st.subheader("🧠 Psychology Tracker")
+if 'Psych_Notes' in df_filtered.columns:
+    for idx, row in df_filtered.iterrows():
+        with st.expander(f"📝 {row['Date'].date()} – {row['Symbol']}"):
+            st.write(row.get('Psych_Notes', "No notes"))
+
+# --- Screenshot Upload System ---
+st.subheader("📸 Trade Screenshot Viewer")
+if 'Screenshot_Link' in df_filtered.columns:
+    for idx, row in df_filtered.iterrows():
+        if pd.notna(row['Screenshot_Link']):
+            st.markdown(f"**{row['Date'].date()} – {row['Symbol']}**")
+            st.image(row['Screenshot_Link'], use_column_width=True)
+
+# --- Footer ---
+st.markdown("---")
+st.markdown("🧪 *Supreme ICT Dashboard v2.0 – Streamlit Edition*")
