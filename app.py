@@ -1,68 +1,44 @@
 import streamlit as st
 import pandas as pd
-import datetime as dt
-import os
 
-st.set_page_config(page_title="Supreme ICT Trade Dashboard v2", layout="wide")
+st.set_page_config(page_title="Supreme ICT Dashboard", layout="wide")
+st.title("📊 Supreme ICT Trade Dashboard")
 
-# --- Title
-st.title("📊 Supreme ICT Trade Dashboard v2")
+uploaded_file = st.file_uploader("📂 Upload Your Trade Log (.xlsx or .csv)", type=["xlsx", "csv"])
 
-# --- Load Data
-uploaded_file = st.file_uploader("Upload Your Trade Log (Excel)", type=["xlsx"])
-if uploaded_file:
-    df = pd.read_excel(uploaded_file)
-
-    # --- Basic Info
-    st.subheader("Trade Summary")
-    st.write(f"Total Trades: {len(df)}")
-
-    # --- Killzone Tagging (IST - 12hr format)
-    def get_killzone_label(t):
-        if isinstance(t, str):
-            t = pd.to_datetime(t).time()
-
-        time = dt.datetime.combine(dt.date.today(), t)
-
-        if dt.time(3,30) <= time.time() < dt.time(6,30):
-            return "Asian (3:30AM–6:30AM)"
-        elif dt.time(11,30) <= time.time() < dt.time(14,30):
-            return "London Open (11:30AM–2:30PM)"
-        elif dt.time(16,30) <= time.time() < dt.time(19,30):
-            return "New York Open (4:30PM–7:30PM)"
-        elif dt.time(19,30) <= time.time() < dt.time(21,30):
-            return "London Close (7:30PM–9:30PM)"
+if uploaded_file is not None:
+    try:
+        # 📥 Read uploaded file
+        if uploaded_file.name.endswith('.csv'):
+            df = pd.read_csv(uploaded_file)
         else:
-            return "Non-Killzone"
+            df = pd.read_excel(uploaded_file)
 
-    if 'Entry Time' in df.columns:
-        df['Killzone (IST)'] = df['Entry Time'].apply(get_killzone_label)
+        # 🧼 Clean column names
+        df.columns = df.columns.str.strip().str.title()
 
-    # --- Filters
-    st.sidebar.header("🔍 Filters")
-    symbol_list = df['Symbol'].unique()
-    symbol = st.sidebar.multiselect("Symbol", symbol_list, default=list(symbol_list))
-    result_filter = st.sidebar.multiselect("Result", df['Result'].unique(), default=list(df['Result'].unique()))
+        # 🕵️ Preview cleaned columns
+        st.success("✅ Columns Detected:")
+        st.write(df.columns.tolist())
 
-    df_filtered = df[(df['Symbol'].isin(symbol)) & (df['Result'].isin(result_filter))]
+        # 🛡️ Try auto-fixing common column names
+        if 'Symbol' not in df.columns:
+            potential_matches = [col for col in df.columns if 'symbol' in col.lower()]
+            if potential_matches:
+                df.rename(columns={potential_matches[0]: 'Symbol'}, inplace=True)
+                st.warning(f"⚠️ Auto-renamed '{potential_matches[0]}' to 'Symbol'")
+        
+        # 🎯 Now access Symbol column safely
+        if 'Symbol' in df.columns:
+            symbol_list = df['Symbol'].dropna().unique()
+            st.success("🪙 Unique Symbols Found:")
+            st.write(symbol_list)
+        else:
+            st.error("❌ Could not find a 'Symbol' column even after cleaning. Please check your file format.")
 
-    # --- Equity Curve
-    st.subheader("📈 Equity Curve")
-    if 'Balance' in df_filtered.columns:
-        df_filtered['Cumulative PnL'] = df_filtered['Balance'].cumsum()
-        st.line_chart(df_filtered['Cumulative PnL'])
-
-    # --- Session Heatmap
-    st.subheader("🔥 Session Killzone Heatmap")
-    heatmap = df_filtered.groupby('Killzone (IST)').size().reset_index(name='Trades')
-    st.dataframe(heatmap)
-
-    # --- Export Data
-    st.download_button("📥 Export Filtered Data", data=df_filtered.to_csv(index=False), file_name="Filtered_Trades.csv")
-
-    # --- Data Table
-    st.subheader("📋 Trade Data")
-    st.dataframe(df_filtered)
+    except Exception as e:
+        st.error("🚨 Error reading file or processing columns.")
+        st.exception(e)
 
 else:
-    st.info("Please upload your Excel trade log file to begin.")
+    st.info("📎 Please upload a trade log file (.csv or .xlsx) to begin.")
