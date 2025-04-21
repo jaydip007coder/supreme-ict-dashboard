@@ -1,44 +1,69 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+from PIL import Image, ImageDraw
+import os
 
+# --- Title ---
 st.set_page_config(page_title="Supreme ICT Dashboard", layout="wide")
-st.title("📊 Supreme ICT Trade Dashboard")
+st.title("📊 Supreme ICT Trade Dashboard v2")
 
-uploaded_file = st.file_uploader("📂 Upload Your Trade Log (.xlsx or .csv)", type=["xlsx", "csv"])
+# --- File Upload ---
+st.sidebar.header("📁 Upload Trade Data")
+uploaded_file = st.sidebar.file_uploader("Upload your trade log (.csv or .xlsx)", type=["csv", "xlsx"])
 
-if uploaded_file is not None:
+if uploaded_file:
     try:
-        # 📥 Read uploaded file
         if uploaded_file.name.endswith('.csv'):
             df = pd.read_csv(uploaded_file)
         else:
             df = pd.read_excel(uploaded_file)
 
-        # 🧼 Clean column names
+        # Clean column names
         df.columns = df.columns.str.strip().str.title()
 
-        # 🕵️ Preview cleaned columns
-        st.success("✅ Columns Detected:")
-        st.write(df.columns.tolist())
+        # Basic Info
+        st.sidebar.success("✅ File uploaded successfully!")
+        st.subheader("📌 Trade Summary")
+        st.write(f"**Total Trades:** {len(df)}")
 
-        # 🛡️ Try auto-fixing common column names
-        if 'Symbol' not in df.columns:
-            potential_matches = [col for col in df.columns if 'symbol' in col.lower()]
-            if potential_matches:
-                df.rename(columns={potential_matches[0]: 'Symbol'}, inplace=True)
-                st.warning(f"⚠️ Auto-renamed '{potential_matches[0]}' to 'Symbol'")
-        
-        # 🎯 Now access Symbol column safely
+        # Symbol Dropdown
         if 'Symbol' in df.columns:
             symbol_list = df['Symbol'].dropna().unique()
-            st.success("🪙 Unique Symbols Found:")
-            st.write(symbol_list)
+            selected_symbol = st.sidebar.selectbox("Select Symbol", options=symbol_list)
+            filtered_df = df[df['Symbol'] == selected_symbol]
         else:
-            st.error("❌ Could not find a 'Symbol' column even after cleaning. Please check your file format.")
+            st.warning("⚠️ 'Symbol' column not found. Please check your file format.")
+            filtered_df = df
+
+        # --- Dashboard Quick Previews ---
+        st.markdown("## 🔍 Dashboard Quick Previews")
+        st.caption("These will be replaced by real-time visuals or screenshots from your modules.")
+
+        # Helper to create placeholder images
+        def create_placeholder_image(text, size=(600, 200)):
+            img = Image.new("RGB", size, color="lightgrey")
+            draw = ImageDraw.Draw(img)
+            w, h = draw.textsize(text)
+            draw.text(((size[0] - w) / 2, (size[1] - h) / 2), text, fill="black")
+            return img
+
+        # Equity Curve Preview
+        st.markdown("### 📈 Equity Curve")
+        placeholder_equity = create_placeholder_image("Equity Curve Preview")
+        st.image(placeholder_equity, caption="Simulated Equity Curve", use_column_width=True)
+
+        # Psychology State Summary
+        st.markdown("### 🧠 Psychology Snapshot")
+        placeholder_psych = create_placeholder_image("Psychology State Summary")
+        st.image(placeholder_psych, caption="Emotional Zones & States", use_column_width=True)
+
+        # Setup Tag Matrix Preview
+        st.markdown("### 🧩 Setup Tag Performance Matrix")
+        placeholder_matrix = create_placeholder_image("Setup Tag P&L Matrix")
+        st.image(placeholder_matrix, caption="Profit/Loss per Setup Tag", use_column_width=True)
 
     except Exception as e:
-        st.error("🚨 Error reading file or processing columns.")
-        st.exception(e)
-
+        st.error(f"❌ An error occurred: {e}")
 else:
-    st.info("📎 Please upload a trade log file (.csv or .xlsx) to begin.")
+    st.info("👈 Upload your trade log to get started.")
